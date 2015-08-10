@@ -232,8 +232,13 @@ struct x_vc_data {
 		struct timespec last_recv;	/* XXX move to shared? */
 		int32_t maxrec;
 	} sx;
+#define NUM_IOQS    32
 	struct {
-		struct poolq_head ioq;
+		struct poolq_head ioq[NUM_IOQS];
+		uint32_t ioqXcount; /* active */
+		uint32_t ioqLcount; /* cumulative for lane computation */
+		pthread_mutex_t qmutex;
+		pthread_cond_t qcond;
 		bool active;
 		bool nonblock;
 		u_int sendsz;
@@ -251,14 +256,29 @@ struct x_vc_data {
 static inline struct x_vc_data *
 alloc_x_vc_data(void)
 {
+	int lane;
 	struct x_vc_data *xd = mem_zalloc(sizeof(struct x_vc_data));
-	TAILQ_INIT(&xd->shared.ioq.qh);
+
+	for (lane = 0; lane < NUM_IOQS; lane++) {
+		pthread_mutex_init(&xd->shared.ioq[lane].qmutex, NULL);
+		TAILQ_INIT(&xd->shared.ioq[lane].qh);
+	}
+	pthread_mutex_init(&xd->shared.qmutex, NULL);
+	pthread_cond_init(&xd->shared.qcond, NULL);
 	return (xd);
 }
 
 static inline void
 free_x_vc_data(struct x_vc_data *xd)
 {
+	int lane;
+
+	for (lane = 0; lane < NUM_IOQS; lane++) {
+		pthread_mutex_destroy(&xd->shared.ioq[lane].qmutex);
+		/* Should we free or assert list empty here ??? */
+	}
+	pthread_mutex_destroy(&xd->shared.qmutex);
+	pthread_cond_destroy(&xd->shared.qcond);
 	mem_free(xd, sizeof(struct x_vc_data));
 }
 
