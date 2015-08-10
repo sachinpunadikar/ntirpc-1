@@ -193,38 +193,63 @@ svc_ioq_callback(struct work_pool_entry *wpe)
 	SVCXPRT *xprt = (SVCXPRT *)wpe->arg;
 	struct poolq_entry *have;
 	struct xdr_ioq *xioq;
+	int lane;
+	int rc;
 
 	/* qmutex more fine grained than xp_lock */
 	for (;;) {
-		mutex_lock(&xd->shared.ioq.qmutex);
-		have = TAILQ_FIRST(&xd->shared.ioq.qh);
-		if (unlikely(!have)) {
-			xd->shared.active = false;
-			mutex_unlock(&xd->shared.ioq.qmutex);
-			SVC_RELEASE(xprt, SVC_RELEASE_FLAG_NONE);
-			return;
+		for (lane = 0; lane < NUM_IOQS && xd->shared.ioqXcount != 0;
+				lane++) {
+			/* Do we need lock for checking empty Qs? */
+			mutex_lock(&xd->shared.ioq[lane].qmutex);
+			have = TAILQ_FIRST(&xd->shared.ioq[lane].qh);
+			if (!have) {
+				mutex_unlock(&xd->shared.ioq[lane].qmutex);
+				continue;
+			}
+
+			TAILQ_REMOVE(&xd->shared.ioq[lane].qh, have, q);
+			mutex_unlock(&xd->shared.ioq[lane].qmutex);
+			atomic_dec_uint32_t(&xd->shared.ioqXcount);
+			/* do i/o unlocked */
+			xioq = _IOQ(have);
+
+			if (svc_work_pool.params.thrd_max &&
+				!(xprt->xp_flags & SVC_XPRT_FLAG_DESTROYED)) {
+				/* all systems are go! */
+				ioq_flushv(xprt, xd, xioq);
+			}
+			XDR_DESTROY(xioq->xdrs);
 		}
 
-		TAILQ_REMOVE(&xd->shared.ioq.qh, have, q);
-		(xd->shared.ioq.qcount)--;
-		/* do i/o unlocked */
-		mutex_unlock(&xd->shared.ioq.qmutex);
-		xioq = _IOQ(have);
+		mutex_lock(&xd->shared.qmutex);
+		while (atomic_fetch_uint32_t(&xd->shared.ioqXcount) == 0) {
+			struct timespec timeout;
 
-		if (svc_work_pool.params.thrd_max
-		 && !(xprt->xp_flags & SVC_XPRT_FLAG_DESTROYED)) {
-			/* all systems are go! */
-			ioq_flushv(xprt, xd, xioq);
+			clock_gettime(CLOCK_REALTIME_FAST, &timeout);
+			timeout.tv_sec += 5;
+			rc = pthread_cond_timedwait(&xd->shared.qcond,
+						    &xd->shared.qmutex,
+						    &timeout);
+			if (rc == ETIMEDOUT &&
+				atomic_fetch_uint32_t(&xd->shared.ioqXcount)
+					== 0) {
+				xd->shared.active = false;
+				mutex_unlock(&xd->shared.qmutex);
+				SVC_RELEASE(xprt, SVC_RELEASE_FLAG_NONE);
+				return;
+			}
 		}
-		XDR_DESTROY(xioq->xdrs);
+		mutex_unlock(&xd->shared.qmutex);
 	}
-
-	return;
 }
 
 void
 svc_ioq_append(SVCXPRT *xprt, struct x_vc_data *xd, XDR *xdrs)
 {
+	uint32_t lane;
+	uint32_t qcount;
+
 	if (unlikely(!svc_work_pool.params.thrd_max
 		  || (xprt->xp_flags & SVC_XPRT_FLAG_DESTROYED))) {
 		/* discard */
@@ -232,20 +257,27 @@ svc_ioq_append(SVCXPRT *xprt, struct x_vc_data *xd, XDR *xdrs)
 		return;
 	}
 
-	/* qmutex more fine grained than xp_lock */
-	mutex_lock(&xd->shared.ioq.qmutex);
-	(xd->shared.ioq.qcount)++;
-	TAILQ_INSERT_TAIL(&xd->shared.ioq.qh, &(XIOQ(xdrs)->ioq_s), q);
+	lane = atomic_inc_uint32_t(&xd->shared.ioqLcount) % NUM_IOQS;
+	qcount = atomic_inc_uint32_t(&xd->shared.ioqXcount);
+	mutex_lock(&xd->shared.ioq[lane].qmutex);
+	TAILQ_INSERT_TAIL(&xd->shared.ioq[lane].qh, &(XIOQ(xdrs)->ioq_s), q);
+	mutex_unlock(&xd->shared.ioq[lane].qmutex);
 
-	if (!xd->shared.active) {
-		xd->shared.active = true;
-		xd->wpe.fun = svc_ioq_callback;
-		xd->wpe.arg = xprt;
-		mutex_unlock(&xd->shared.ioq.qmutex);
-		SVC_REF(xprt, SVC_REF_FLAG_NONE);
-		work_pool_submit(&svc_work_pool, &xd->wpe);
-	} else {
-		/* queuing multiple output requests for worker efficiency */
-		mutex_unlock(&xd->shared.ioq.qmutex);
+	if (qcount == 1) {
+		/* Queue was empty. Either start a thread or wake up
+		 * if one already exists (but possibly waiting)
+		 */
+		mutex_lock(&xd->shared.qmutex);
+		if (unlikely(!xd->shared.active)) {
+			xd->shared.active = true; /* for good! */
+			mutex_unlock(&xd->shared.qmutex);
+			xd->wpe.fun = svc_ioq_callback;
+			xd->wpe.arg = xprt;
+			SVC_REF(xprt, SVC_REF_FLAG_NONE);
+			work_pool_submit(&svc_work_pool, &xd->wpe);
+		} else {
+			mutex_unlock(&xd->shared.qmutex);
+			pthread_cond_signal(&xd->shared.qcond);
+		}
 	}
 }

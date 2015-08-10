@@ -76,9 +76,9 @@ mutex_init(pthread_mutex_t *m, const pthread_mutexattr_t *a
 	return (rslt);
 }
 
-#define mutex_lock(m)		pthread_mutex_lock(m)
+#define mutex_lock(m)		do { if (pthread_mutex_lock(m)) abort();} while (0)
 #define mutex_trylock(m)		pthread_mutex_trylock(m)
-#define mutex_unlock(m)		pthread_mutex_unlock(m)
+#define mutex_unlock(m)		do { if (pthread_mutex_unlock(m)) abort();} while (0)
 #define mutex_destroy(m)	pthread_mutex_destroy(m)
 
 #define cond_init(c, a, p)	pthread_cond_init(c, a)
