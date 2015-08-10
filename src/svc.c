@@ -121,7 +121,7 @@ svc_work_pool_init()
 {
 	struct work_pool_params params = {
 		.thrd_max = __svc_params->ioq.thrd_max,
-		.thrd_min = 2
+		.thrd_min = 10
 	};
 
 	return work_pool_init(&svc_work_pool, "svc_work_pool", &params);
