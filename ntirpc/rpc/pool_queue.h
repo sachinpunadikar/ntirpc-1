@@ -42,6 +42,7 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <misc/queue.h>
+#include <misc/portable.h>
 
 struct poolq_entry {
 	TAILQ_ENTRY(poolq_entry) q;	/*** 1st ***/
@@ -58,6 +59,7 @@ struct poolq_head {
 					 * 0: static size */
 	int qcount;			/* number of entries,
 					 * < 0: has waiting workers. */
+	CACHE_PAD(0);  /* TODO: re-org */
 };
 
 static inline void
