@@ -227,7 +227,7 @@ svc_ioq_callback(struct work_pool_entry *wpe)
 			struct timespec timeout;
 
 			clock_gettime(CLOCK_REALTIME_FAST, &timeout);
-			timeout.tv_sec += 5;
+			timespec_addms(&timeout, 500); /* half a second wait */
 			rc = pthread_cond_timedwait(&xd->shared.qcond,
 						    &xd->shared.qmutex,
 						    &timeout);
