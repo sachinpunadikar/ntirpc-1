@@ -44,6 +44,7 @@
 
 struct authgss_x_part {
 	uint32_t gen;
+	uint32_t size;
 	 TAILQ_HEAD(ctx_tailq, svc_rpc_gss_data) lru_q;
 };
 
@@ -126,14 +127,14 @@ authgss_hash_init()
 		}
 		/* partition ctx LRU */
 		axp = (struct authgss_x_part *)
-		    mem_alloc(sizeof(struct authgss_x_part));
+		    mem_zalloc(sizeof(struct authgss_x_part));
 		TAILQ_INIT(&axp->lru_q);
 		xp->u1 = axp;
 	}
 
 	authgss_hash_st.size = 0;
 	authgss_hash_st.max_part =
-	    __svc_params->gss.max_gc / authgss_hash_st.xt.npart;
+	    __svc_params->gss.max_ctx / authgss_hash_st.xt.npart;
 	authgss_hash_st.initialized = true;
 
  unlock:
@@ -202,6 +203,7 @@ authgss_ctx_hash_set(struct svc_rpc_gss_data *gd)
 	/* lru */
 	axp = (struct authgss_x_part *)t->u1;
 	TAILQ_INSERT_TAIL(&axp->lru_q, gd, lru_q);
+	++(axp->size);
 	mutex_unlock(&t->mtx);
 
 	/* global size */
@@ -223,6 +225,7 @@ authgss_ctx_hash_del(struct svc_rpc_gss_data *gd)
 	rbtree_x_cached_remove(&authgss_hash_st.xt, t, &gd->node_k, gd->hk.k);
 	axp = (struct authgss_x_part *)t->u1;
 	TAILQ_REMOVE(&axp->lru_q, gd, lru_q);
+	--(axp->size);
 	mutex_unlock(&t->mtx);
 
 	/* global size */
@@ -258,33 +261,35 @@ void authgss_ctx_gc_idle(void)
 
 	cond_init_authgss_hash();
 
-	for (ix = 0, part = IDLE_NEXT(); ix < authgss_hash_st.xt.npart;
+	for (ix = 0, cnt = 0, part = IDLE_NEXT();
+	     ((ix < authgss_hash_st.xt.npart) &&
+		     (cnt < __svc_params->gss.max_gc));
 	     ++ix, part = IDLE_NEXT()) {
 		xp = &(authgss_hash_st.xt.tree[part]);
 		axp = (struct authgss_x_part *)xp->u1;
-		cnt = 0;
 		mutex_lock(&xp->mtx);
  again:
 		gd = TAILQ_FIRST(&axp->lru_q);
 		if (!gd)
 			goto next_t;
 
-		if (unlikely((authgss_hash_st.size > __svc_params->gss.max_gc)
-			     ||
-			     ((abs(axp->gen - gd->gen) >
-			       __svc_params->gss.max_idle_gen))
-			     || (authgss_ctx_expired(gd)))) {
+		/* Remove the least-recently-used entry in this hash
+		 * partition iff it is expired, or the partition size
+		 * limit is exceeded */
+		if (unlikely((axp->size > authgss_hash_st.max_part)
+				|| (authgss_ctx_expired(gd)))) {
 
 			/* remove entry */
 			rbtree_x_cached_remove(&authgss_hash_st.xt, xp,
 					       &gd->node_k, gd->hk.k);
 			TAILQ_REMOVE(&axp->lru_q, gd, lru_q);
+			--(axp->size);
 			(void)atomic_dec_uint32_t(&authgss_hash_st.size);
 
 			/* drop sentinel ref (may free gd) */
 			unref_svc_rpc_gss_data(gd, SVC_RPC_GSS_FLAG_NONE);
 
-			if (++cnt < authgss_hash_st.max_part)
+			if (++cnt < __svc_params->gss.max_gc)
 				goto again;
 		}
  next_t:
