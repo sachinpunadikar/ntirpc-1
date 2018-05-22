@@ -42,16 +42,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-/*
- * The following union is defined just to use SVC_CMSG_LEN macro for an
- * array length. _GNU_SOURCE must be defined to get in6_pktinfo
- * declaration!
- */
-union in_pktinfo_u {
-	struct in_pktinfo x;
-	struct in6_pktinfo y;
-};
-#define SVC_CMSG_LEN CMSG_SPACE(sizeof(union in_pktinfo_u))
+/* Enough buffer to get IP_PKTINFO and IP6_PKTINFO */
+#define SVC_CMSG_LEN (CMSG_SPACE(sizeof(struct in_pktinfo)) + \
+                CMSG_SPACE(sizeof(struct in6_pktinfo)))
+
 
 /*
  * kept in xprt->xp_p2
