@@ -666,7 +666,7 @@ svc_rqst_unhook_events(SVCXPRT *xprt /* LOCKED */ ,
 				"%s: %p epoll del fd %d "
 				"sr_rec %p epoll_fd %d "
 				"control fd pair (%d:%d) (%d, %d)",
-				__func__, xprt, xprt->xp_fd,
+				__func__, xprt, xprt->xp_fd.fd,
 				sr_rec, sr_rec->ev_u.epoll.epoll_fd,
 				sr_rec->sv[0], sr_rec->sv[1],
 				code, errno);
@@ -721,7 +721,7 @@ svc_rqst_rearm_events(SVCXPRT *xprt, uint32_t __attribute__ ((unused)) flags)
 				"%s: %p epoll arm fd %d "
 				"sr_rec %p epoll_fd %d "
 				"control fd pair (%d:%d) (%d, %d)",
-				__func__, xprt, xprt->xp_fd,
+				__func__, xprt, xprt->xp_fd.fd,
 				sr_rec, sr_rec->ev_u.epoll.epoll_fd,
 				sr_rec->sv[0], sr_rec->sv[1],
 				code, errno);
@@ -771,7 +771,7 @@ svc_rqst_hook_events(SVCXPRT *xprt /* LOCKED */ ,
 				"%s: %p epoll add failed fd %d "
 				"sr_rec %p epoll_fd %d "
 				"control fd pair (%d:%d) (%d, %d)",
-				__func__, xprt, xprt->xp_fd,
+				__func__, xprt, xprt->xp_fd.fd,
 				sr_rec, sr_rec->ev_u.epoll.epoll_fd,
 				sr_rec->sv[0], sr_rec->sv[1],
 				code, errno);
@@ -784,7 +784,7 @@ svc_rqst_hook_events(SVCXPRT *xprt /* LOCKED */ ,
 				"%s: %p epoll add fd %d "
 				"sr_rec %p epoll_fd %d "
 				"control fd pair (%d:%d) (%d, %d)",
-				__func__, xprt, xprt->xp_fd,
+				__func__, xprt, xprt->xp_fd.fd,
 				sr_rec, sr_rec->ev_u.epoll.epoll_fd,
 				sr_rec->sv[0], sr_rec->sv[1],
 				code, errno);

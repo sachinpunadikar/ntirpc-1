@@ -108,7 +108,7 @@ svc_rdma_ncreate(void *arg, const u_int sendsize, const u_int recvsize,
 
 	xprt->xprt.xp_flags = flags;
 	/* fixme: put something here, but make it not work on fd operations. */
-	xprt->xprt.xp_fd = -1;
+	xprt->xprt.xp_fd.fd = -1;
 
 	ss = (struct sockaddr_storage *)rdma_get_local_addr(xprt->cm_id);
 	__rpc_set_address(&xprt->xprt.xp_local, ss, 0);

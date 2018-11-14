@@ -292,7 +292,7 @@ svc_xprt_dump_xprts(const char *tag)
 			xprt = opr_containerof(n, struct rpc_svcxprt, xp_fd_node);
 			__warnx(TIRPC_DEBUG_FLAG_SVC_XPRT,
 				"xprts at %s: %p xp_fd %d",
-				tag, xprt, xprt->xp_fd);
+				tag, xprt, xprt->xp_fd.fd);
 			n = opr_rbtree_next(n);
 		}		/* curr partition */
 		rwlock_unlock(&t->lock);	/* t !LOCKED */
@@ -362,5 +362,5 @@ svc_xprt_trace(SVCXPRT *xprt, const char *func, const char *tag, const int line)
 		"%s() %p xp_refs %" PRId32
 		" fd %d port %d @ %s:%d",
 		func, xprt, xprt->xp_refs,
-		xprt->xp_fd, port, tag, line);
+		xprt->xp_fd.fd, port, tag, line);
 }
