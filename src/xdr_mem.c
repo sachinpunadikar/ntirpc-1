@@ -57,6 +57,10 @@
 typedef bool (*dummyfunc3)(XDR *, int, void *);
 typedef bool (*dummy_getbufs)(XDR *, xdr_uio *, u_int);
 typedef bool (*dummy_putbufs)(XDR *, xdr_uio *, u_int);
+typedef bool (*dummy_newbuf)(struct rpc_xdr *);
+typedef int (*dummy_iovcount)(struct rpc_xdr *, u_int);
+typedef bool (*dummy_fillbufs)(struct rpc_xdr *, u_int, xdr_vio *);
+typedef bool (*dummy_allochdrs)(struct rpc_xdr *, u_int, xdr_vio *, int);
 
 static const struct xdr_ops xdrmem_ops_aligned;
 
@@ -174,6 +178,12 @@ xdrmem_noop(void)
 	return (false);
 }
 
+static int
+xdrmem_noop_int(void)
+{
+	return -1;
+}
+
 static const struct xdr_ops xdrmem_ops_aligned = {
 	xdrmem_getunit,
 	xdrmem_putunit,
@@ -185,4 +195,8 @@ static const struct xdr_ops xdrmem_ops_aligned = {
 	(dummyfunc3) xdrmem_noop,	/* x_control */
 	(dummy_getbufs) xdrmem_noop,	/* x_getbufs */
 	(dummy_putbufs) xdrmem_noop,	/* x_putbufs */
+	(dummy_newbuf) xdrmem_noop,	/* x_newbuf */
+	(dummy_iovcount) xdrmem_noop_int,	/* x_iovcount */
+	(dummy_fillbufs) xdrmem_noop,	/* x_fillbufs */
+	(dummy_allochdrs) xdrmem_noop,	/* x_allochdrs */
 };
