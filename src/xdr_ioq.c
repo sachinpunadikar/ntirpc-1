@@ -82,6 +82,10 @@ xdr_ioq_uv_create(size_t size, u_int uio_flags)
 	uv->u.uio_flags = uio_flags;
 	uv->u.uio_references = 1;	/* starting one */
 
+	__warnx(TIRPC_DEBUG_FLAG_ERROR,
+		"%s() uv %p size %ul",
+		__func__, uv, (unsigned long) size);
+
 	return (uv);
 }
 
@@ -326,6 +330,11 @@ xdr_ioq_uv_advance(struct xdr_ioq *xioq)
 
 	len = ioquv_length(uv);
 	xioq->ioq_uv.plength += len;
+
+	__warnx(TIRPC_DEBUG_FLAG_ERROR,
+		"%s() uv %p len %lu plength %lu NEXT %p",
+		__func__, uv, (unsigned long) len, (unsigned long) xioq->ioq_uv.plength,
+		IOQ_(TAILQ_NEXT(&uv->uvq, q)));
 
 	/* next buffer, if any */
 	return IOQ_(TAILQ_NEXT(&uv->uvq, q));
@@ -782,6 +791,10 @@ xdr_ioq_newbuf(XDR *xdrs)
 	else
 		xdr_ioq_uv_update(XIOQ(xdrs), uv);
 
+	__warnx(TIRPC_DEBUG_FLAG_ERROR,
+		"%s() uv %p",
+		__func__, uv);
+
 	/* At this point, the position has been updated to point to the
 	 * start of the new buffer since xdr_ioq_uv_update has been called
 	 * (it's called at the end of xdr_ioq_uv_append).
@@ -845,6 +858,13 @@ xdr_ioq_fillbufs(XDR *xdrs, u_int start, xdr_vio *vector)
 
 		uv = IOQ_(have);
 		len = ioquv_length(uv);
+
+		__warnx(TIRPC_DEBUG_FLAG_ERROR,
+			"Examining xdr_ioq_uv %p (base %p head %p tail %p wrap %p) - %s start %lu len %lu idx %d ",
+			uv, uv->v.vio_base, uv->v.vio_head,
+			uv->v.vio_tail, uv->v.vio_wrap,
+			found ? "found" : "not found",
+			(unsigned long) start, (unsigned long) len, idx);
 
 		if (!found) {
 			if (start == 0) {

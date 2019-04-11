@@ -171,6 +171,24 @@ xdr_rpc_gss_init_res(XDR *xdrs, struct rpc_gss_init_res *p)
 	return (xdr_stat);
 }
 
+void
+gss_log_error(char *m, OM_uint32 maj_stat, OM_uint32 min_stat)
+{
+	OM_uint32 min;
+	gss_buffer_desc msg1, msg2;
+	int msg_ctx = 0;
+
+	gss_display_status(&min, maj_stat, GSS_C_GSS_CODE, GSS_C_NULL_OID,
+			   &msg_ctx, &msg1);
+
+	gss_display_status(&min, min_stat, GSS_C_MECH_CODE, GSS_C_NULL_OID,
+			   &msg_ctx, &msg2);
+	__warnx(TIRPC_DEBUG_FLAG_ERROR, "rpcsec_gss: %s: %s - %s\n",
+		m, (char *)msg1.value, (char *)msg2.value);
+	gss_release_buffer(&min, &msg1);
+	gss_release_buffer(&min, &msg2);
+}
+
 bool
 xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 		 gss_ctx_id_t ctx, gss_qop_t qop, rpc_gss_svc_t svc, u_int seq)
@@ -187,6 +205,9 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 	if (svc != RPCSEC_GSS_SVC_PRIVACY &&
 	    svc != RPCSEC_GSS_SVC_INTEGRITY) {
 		/* For some reason we got here with not supported type. */
+		__warnx(TIRPC_DEBUG_FLAG_ERROR,
+			"%s() svc != RPCSEC_GSS_SVC_PRIVACY or RPCSEC_GSS_SVC_INTEGRITY",
+			__func__);
 		return (FALSE);
 	}
 
@@ -200,8 +221,12 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 	 */
 	start = XDR_GETPOS(xdrs);
 	databuflen = 0xaaaaaaaa;	/* should always overwrite */
-	if (!XDR_PUTUINT32(xdrs, databuflen))
+	if (!XDR_PUTUINT32(xdrs, databuflen)) {
+		__warnx(TIRPC_DEBUG_FLAG_ERROR,
+			"%s() could not put databuflen",
+			__func__);
 		return (FALSE);
+	}
 
 	/* Determine if XDR is a vector or not.
 	 * If it's a vector, a new buffer has been allocated.
@@ -212,8 +237,12 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 	 * If it's a vector, the response has been marshalled into a new
 	 * buffer so that we will be able to insert any header.
 	 */
-	if (!XDR_PUTUINT32(xdrs, seq) || !(*xdr_func) (xdrs, xdr_ptr))
+	if (!XDR_PUTUINT32(xdrs, seq) || !(*xdr_func) (xdrs, xdr_ptr)) {
+		__warnx(TIRPC_DEBUG_FLAG_ERROR,
+			"%s() could not enocde rpc_gss_data_t",
+			__func__);
 		return (FALSE);
+	}
 	end = XDR_GETPOS(xdrs);
 	databuflen = end - start - 4;
 
@@ -225,8 +254,12 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 		 */
 		data_count = XDR_IOVCOUNT(xdrs, start + 4);
 
-		if (data_count < 0)
+		if (data_count < 0) {
+			__warnx(TIRPC_DEBUG_FLAG_ERROR,
+				"%s() data_count = %d",
+				__func__, data_count);
 			return (FALSE);
+		}
 
 		if (svc == RPCSEC_GSS_SVC_INTEGRITY) {
 			/* Add a trailer buffer for the MIC */
@@ -292,6 +325,10 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 				/* Set up TRAILER buffer for PRIVACY*/
 				gss_iov[i].type = GSS_IOV_BUFFER_TYPE_TRAILER;
 			}
+			__warnx(TIRPC_DEBUG_FLAG_ERROR,
+				"buf %d type %d length %d value %p",
+				i, gss_iov[i].type, gss_iov[i].buffer.length,
+				gss_iov[i].buffer.value);
 		}
 
 		/* At this point gss_iov HEADER, PADDING, and TRAILER have
@@ -307,9 +344,11 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 							  gss_iov, iov_count);
 
 			if (maj_stat != GSS_S_COMPLETE) {
-				__warnx(TIRPC_DEBUG_FLAG_RPCSEC_GSS,
+				__warnx(TIRPC_DEBUG_FLAG_ERROR,
 					"%s() gss_get_mic_iov_length failed",
 					__func__);
+				gss_log_error("gss_get_mic_iov_length",
+					      maj_stat, min_stat);
 				xdr_stat = FALSE;
 				goto out;
 			}
@@ -325,7 +364,7 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 			 * cursor position to the end of everything.
 			 */
 			if (!XDR_SETPOS(xdrs, start)) {
-				__warnx(TIRPC_DEBUG_FLAG_RPCSEC_GSS,
+				__warnx(TIRPC_DEBUG_FLAG_ERROR,
 					"%s() XDR_SETPOS #2 failed",
 					__func__);
 				return (FALSE);
@@ -342,9 +381,11 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 						       gss_iov, iov_count);
 
 			if (maj_stat != GSS_S_COMPLETE) {
-				__warnx(TIRPC_DEBUG_FLAG_RPCSEC_GSS,
+				__warnx(TIRPC_DEBUG_FLAG_ERROR,
 					"%s() gss_wrap_iov_length failed",
 					__func__);
+				gss_log_error("gss_wrap_iov_length",
+					      maj_stat, min_stat);
 				xdr_stat = FALSE;
 				goto out;
 			}
@@ -378,14 +419,18 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 			 * cursor position to the end of everything.
 			 */
 			if (!XDR_SETPOS(xdrs, start)) {
-				__warnx(TIRPC_DEBUG_FLAG_RPCSEC_GSS,
+				__warnx(TIRPC_DEBUG_FLAG_ERROR,
 					"%s() XDR_SETPOS #2 failed",
 					__func__);
 				return (FALSE);
 			}
 
-			if (!XDR_PUTUINT32(xdrs, databody_priv_len))
+			if (!XDR_PUTUINT32(xdrs, databody_priv_len)) {
+				__warnx(TIRPC_DEBUG_FLAG_ERROR,
+					"%s() XDR_PUTUINT32 databody_priv_len failed",
+					__func__);
 				return (FALSE);
+			}
 		}
 
 		/* At this point:
@@ -417,9 +462,11 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 						   gss_iov, iov_count);
 
 			if (maj_stat != GSS_S_COMPLETE) {
-				__warnx(TIRPC_DEBUG_FLAG_RPCSEC_GSS,
+				__warnx(TIRPC_DEBUG_FLAG_ERROR,
 					"%s() gss_get_mic_iov failed",
 					__func__);
+				gss_log_error("gss_get_mic_iov",
+					      maj_stat, min_stat);
 				xdr_stat = FALSE;
 				goto out;
 			}
@@ -443,9 +490,11 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 						gss_iov, iov_count);
 
 			if (maj_stat != GSS_S_COMPLETE) {
-				__warnx(TIRPC_DEBUG_FLAG_RPCSEC_GSS,
+				__warnx(TIRPC_DEBUG_FLAG_ERROR,
 					"%s() gss_wrap_iov failed",
 					__func__);
+				gss_log_error("gss_wrap_iov",
+					      maj_stat, min_stat);
 				xdr_stat = FALSE;
 				goto out;
 			}
