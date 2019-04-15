@@ -317,7 +317,7 @@ xdr_rpc_gss_wrap(XDR *xdrs, xdrproc_t xdr_func, void *xdr_ptr,
 							xdr_iov[i].vio_head;
 			} else if (svc == RPCSEC_GSS_SVC_INTEGRITY) {
 				/* Set up TRAILER buffer for INTEGRITY*/
-				gss_iov[i].type = GSS_IOV_BUFFER_TYPE_TRAILER;
+				gss_iov[i].type = GSS_IOV_BUFFER_TYPE_MIC_TOKEN;
 			} else if (i == after_data) {
 				/* Set up PADDING buffer for PRIVACY*/
 				gss_iov[i].type = GSS_IOV_BUFFER_TYPE_PADDING;
