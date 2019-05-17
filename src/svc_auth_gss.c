@@ -660,7 +660,7 @@ _svcauth_gss(struct svc_req *req, bool *no_dispatch)
 	}
 gd_free:
 	mutex_unlock(&gd->lock);
-	if (gd_hashed) {
+	if (gd_hashed && (gc->gc_proc != RPCSEC_GSS_DATA)) {
 		unref_svc_rpc_gss_data(gd);
 		gd_hashed = false;
 	}
