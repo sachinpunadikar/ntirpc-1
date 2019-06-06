@@ -450,6 +450,8 @@ extern CLIENT *clnt_vc_ncreate2(struct gfd gfd, const struct netbuf *,
 				const rpcprog_t, const rpcvers_t, u_int, u_int,
 				u_int);
 
+extern void clnt_vc_destroy(CLIENT *clnt);
+
 #if !defined(_WIN32)
 /*
  * Added for compatibility to old rpc 4.0. Obsoleted by clnt_vc_create().

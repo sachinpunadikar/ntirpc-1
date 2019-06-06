@@ -91,7 +91,7 @@ static void clnt_vc_abort(CLIENT *);
 static bool clnt_vc_control(CLIENT *, u_int, void *);
 static bool clnt_vc_ref(CLIENT *, u_int);
 static void clnt_vc_release(CLIENT *, u_int);
-static void clnt_vc_destroy(CLIENT *);
+void clnt_vc_destroy(CLIENT *);
 static struct clnt_ops *clnt_vc_ops(void);
 static bool time_not_ok(struct timeval *);
 int generic_read_vc(XDR *, void *, void *, int);
@@ -823,7 +823,7 @@ clnt_vc_release(CLIENT *clnt, u_int flags)
 		mutex_unlock(&clnt->cl_lock);
 }
 
-static void
+void
 clnt_vc_destroy(CLIENT *clnt)
 {
 	struct rpc_dplx_rec *rec;
