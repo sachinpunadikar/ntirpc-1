@@ -323,6 +323,7 @@ clnt_vc_ncreate2(struct gfd gfd,	/* open file descriptor */
 		if (rpc_dplx_unref(rec, RPC_DPLX_FLAG_LOCKED))
 			REC_UNLOCK(rec);
 	}
+	close(gfd.fd);
 	thr_sigsetmask(SIG_SETMASK, &(mask), NULL);
 	return (NULL);
 }
